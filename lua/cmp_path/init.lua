@@ -19,6 +19,8 @@ local defaults = {
   get_cwd = function(params)
     return vim.fn.expand(('#%d:p:h'):format(params.context.bufnr))
   end,
+  -- some of my files are on nfs. they are really slow sometimes
+  exclude = {},
 }
 
 source.new = function()
@@ -31,6 +33,7 @@ source._validate_options = function(_, params)
   vim.validate({
     trailing_slash = { opts.trailing_slash, 'boolean' },
     get_cwd = { opts.get_cwd, 'function' },
+    exclude = { opts.exclude, 'table' }, 
   })
   return opts
 end
@@ -131,6 +134,16 @@ source._candidates = function(_, dirname, include_hidden, opts, callback)
     return callback(err, nil)
   end
 
+  local function is_excluded(name)
+    for _, exclude_name in ipairs(opts.exclude) do
+      if name:match(exclude_name) then
+        return true
+      end
+    end
+    return false
+  end
+
+
   local items = {}
 
   local function create_item(name, fs_type)
@@ -139,6 +152,23 @@ source._candidates = function(_, dirname, include_hidden, opts, callback)
     end
 
     local path = dirname .. '/' .. name
+
+    if is_excluded(name) then
+      local item = {
+        label = name,
+        filterText = name,
+        insertText = name,
+        kind = cmp.lsp.CompletionItemKind.File,
+        data = {
+          path = path,
+          type = fs_type,
+          stat = nil,
+          lstat = nil,
+        },
+      }
+      table.insert(items, item)
+      return
+    end
     local stat = vim.loop.fs_stat(path)
     local lstat = nil
     if stat then
